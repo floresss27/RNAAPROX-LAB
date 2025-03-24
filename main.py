@@ -1,65 +1,76 @@
-#pip install numpy matplotlib scikit-learn
-
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import MaxAbsScaler
+import os
+import statistics
 
-print('Carregando Arquivo de teste')
-arquivo = np.load('teste1.npy')
-x = arquivo[0]
+arquivos = ['teste2.npy', 'teste3.npy', 'teste4.npy', 'teste5.npy']
+arquiteturas = [
+    (10,),
+    (20, 10),
+    (50, 30, 10),
+]
+iteracoes = 1000
+execucoes = 10
 
+def executar_teste(x, y, arq):
+    erros = []
+    modelos = []
+    resultados = []
+    for i in range(execucoes):
+        regr = MLPRegressor(
+            hidden_layer_sizes=arq,
+            max_iter=iteracoes,
+            activation='tanh',
+            solver='adam',
+            learning_rate='adaptive',
+            n_iter_no_change=iteracoes,
+            verbose=False
+        )
+        modelo = regr.fit(x, y)
+        erro_final = modelo.loss_curve_[-1]
+        erros.append(erro_final)
+        modelos.append(modelo)
+        resultados.append(modelo.predict(x))
+    return erros, modelos, resultados
 
-scale= MaxAbsScaler().fit(arquivo[1])
-y = np.ravel(scale.transform(arquivo[1]))
+for nome_arquivo in arquivos:
+    print(f'\n==== Testando {nome_arquivo} ====')
+    arquivo = np.load(nome_arquivo)
+    x = arquivo[0]
+    y = np.ravel(MaxAbsScaler().fit(arquivo[1]).transform(arquivo[1]))
 
+    for arq in arquiteturas:
+        print(f'\nArquitetura: {arq}')
+        erros, modelos, resultados = executar_teste(x, y, arq)
 
-iteracoes = 400
+        media = round(statistics.mean(erros), 6)
+        desvio = round(statistics.stdev(erros), 6)
+        print(f'Média do erro final: {media}')
+        print(f'Desvio padrão: {desvio}')
 
-regr = MLPRegressor(hidden_layer_sizes=(15,5),
-                    max_iter=iteracoes,
-                    activation='tanh', #{'identity', 'logistic', 'tanh', 'relu'},
-                    solver='adam', #{‘lbfgs’, ‘sgd’, ‘adam’}
-                    #loss_curve_ = 5, #se lbfgs
-                    learning_rate = 'adaptive',
-                    n_iter_no_change=iteracoes,
-                    verbose=False)
-print('Treinando RNA')
-regr = regr.fit(x,y)
+        idx_melhor = np.argmin(erros)
+        melhor_modelo = modelos[idx_melhor]
+        y_pred = resultados[idx_melhor]
 
+        plt.figure(figsize=[14, 7])
+        plt.suptitle(f'{nome_arquivo} | Arquitetura: {arq} | Erro: {round(erros[idx_melhor], 5)}', fontsize=14)
 
+        plt.subplot(1, 3, 1)
+        plt.title('Função Original')
+        plt.plot(x, y, color='green')
 
-print('Preditor')
-y_est = regr.predict(x)
+        plt.subplot(1, 3, 2)
+        plt.title('Curva de Erro')
+        plt.plot(melhor_modelo.loss_curve_, color='red')
 
+        plt.subplot(1, 3, 3)
+        plt.title('Original vs Aproximada')
+        plt.plot(x, y, linewidth=1, color='green', label='Original')
+        plt.plot(x, y_pred, linewidth=2, color='blue', label='Aproximada')
+        plt.legend()
 
-
-
-
-
-plt.figure(figsize=[14,7])
-
-#plot curso original
-
-plt.subplot(1,3,1)
-plt.title('Função Original')
-plt.plot(x,y,color='green')
-
-
-#plot aprendizagem
-
-plt.subplot(1,3,2)
-plt.title('Curva erro (%s)' % str(round(regr.best_loss_,5)))
-plt.plot(regr.loss_curve_,color='red')
-print(regr.best_loss_)
-
-#plot regressor
-plt.subplot(1,3,3)
-plt.title('Função Original x Função aproximada')
-plt.plot(x,y,linewidth=1,color='green')
-plt.plot(x,y_est,linewidth=2,color='blue')
-plt.show()
-
-
-
-
+        plt.tight_layout()
+        plt.savefig(f'{nome_arquivo}_arch_{str(arq).replace(",", "-")}.png')
+        plt.close()
